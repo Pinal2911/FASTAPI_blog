@@ -1,0 +1,81 @@
+Pydantic is a Python library used to validate, parse, and serialize data using Python type hints.
+
+It ensures incoming data has the correct type and format before your application uses it.
+
+Simple FastAPI Example
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class User(BaseModel):
+    name: str
+    age: int
+
+@app.post("/users")
+def create_user(user: User):
+    return {
+        "message": "User created",
+        "user": user
+    }
+Explanation
+1. Define Data Model
+class User(BaseModel):
+    name: str
+    age: int
+
+Pydantic validates that:
+
+name is a string
+age is an integer
+2. API Endpoint
+@app.post("/users")
+def create_user(user: User):
+
+When a POST request comes, FastAPI:
+
+Reads JSON body
+Creates a User object
+Uses Pydantic to validate data
+Calls the function only if validation succeeds
+Valid Request
+{
+    "name": "John",
+    "age": 25
+}
+
+Response:
+
+{
+    "message": "User created",
+    "user": {
+        "name": "John",
+        "age": 25
+    }
+}
+Invalid Request
+{
+    "name": "John",
+    "age": "abc"
+}
+
+Response:
+
+{
+    "detail": [
+        {
+            "msg": "Input should be a valid integer"
+        }
+    ]
+}
+
+Because Pydantic checks that age must be an integer.
+
+Interview Answer (30 seconds)
+
+Pydantic is a data validation library used heavily with FastAPI. We define models using BaseModel, and Pydantic automatically validates and converts incoming JSON data according to the specified types. If the data is invalid, it returns validation errors automatically. For example, if a field is defined as int, Pydantic ensures only integer values are accepted.
+
+
+Pydantic is not a database. 
+It is a validation layer that sits between the API and the database. 
+It ensures incoming data is correct before the application processes or stores it. The database is responsible for persisting the validated data.
