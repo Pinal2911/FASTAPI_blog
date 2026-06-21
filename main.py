@@ -1,10 +1,17 @@
-from fastapi import FastAPI,Request,HTTPException,status
+from fastapi import Depends,FastAPI,Request,HTTPException,status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse,JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from schemas import PostCreate, PostResponse
+from schemas import PostCreate, PostResponse, UserCreate, UserBase, UserResponse
+from typing import Annotated
+from sqlalchemy.orm import Session
+import models
+from database import Base, engine,get_db
+from sqlalchemy import select
+Base.metadata.create_all(bind=engine)
+
 posts: list[dict] = [
     {
         "id": 1,
@@ -28,9 +35,11 @@ app.mount("/static",StaticFiles(directory="static"),name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-@app.get('/',name='home')
-@app.get('posts',name='app/posts')
-def home(request:Request):
+@app.get('/',name='home',include_in_schema=False)
+@app.get('/posts',name='app/posts',include_in_schema=False)
+def home(request:Request, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Post))
+    posts = result.scalars.all()
     return templates.TemplateResponse(
         request,
         "home.html",
@@ -45,8 +54,11 @@ def homeHTML():
 def post():
     return posts
 
+
 @app.get("/posts/{post_id}",include_in_schema=False)
-def post_page(request: Request,post_id:int):
+def post_page(request: Request,post_id:int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Post).where(models.Post.id == post_id))
+    post=result.scalars().first()
     for post in posts:
         if post.get("id") == post_id:
             title = post["title"][:50]
@@ -56,6 +68,29 @@ def post_page(request: Request,post_id:int):
                 {"post":post,"title":title},
             )
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Post not found")
+
+@app.get("/users/{user_id}/posts",include_in_schema=False,name="user_posts")
+def user_posts_page(
+    request:Request,
+    user_id:int,
+    db:Annotated[Session, Depends(get_db)],
+):
+    result = db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    result = db.execute(select(models.Post.user_id == user_id))
+    posts=result.scalars.all()
+
+    return templates.TemplateResponse(
+        request,
+        "user_posts.html",
+        {"posts":posts, "user":user,"title": f"{user.username}'s Posts"},
+    )
 
 @app.post(
         "/api/posts",

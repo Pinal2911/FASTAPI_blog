@@ -1,0 +1,203 @@
+Code
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
+Explanation
+create_engine() → Creates a connection engine to the database.
+SQLALCHEMY_DATABASE_URL → Database connection string (e.g., SQLite file path).
+connect_args → Extra arguments passed to the database driver during connection.
+check_same_thread=False
+
+By default, SQLite allows a connection to be used only in the thread that created it.
+
+connect_args={"check_same_thread": False}
+
+means:
+
+Allow the same database connection to be used across multiple threads.
+
+Why in FastAPI?
+
+FastAPI can handle requests in multiple threads.
+
+Without this:
+
+SQLite objects created in a thread can only be used in that same thread
+
+error may occur.
+
+Interview Answer
+
+connect_args is used to pass additional connection parameters to the database driver. For SQLite, check_same_thread=False allows the database connection to be shared across multiple threads, which is commonly needed in FastAPI applications.
+
+eg: when there are multiple read,write to db then if we have this check_same_thread then it helps via multi threading?
+
+Not exactly.
+
+check_same_thread=False does not make SQLite multithreaded or improve read/write performance.
+
+It only tells SQLite:
+
+"Don't raise an error if this connection is accessed from a different thread."
+
+Example
+
+Without it:
+
+Thread 1 creates connection
+    ↓
+Thread 2 uses same connection
+    ↓
+Error!
+
+With it:
+
+Thread 1 creates connection
+    ↓
+Thread 2 uses same connection
+    ↓
+Allowed
+For multiple reads/writes
+Request 1 → Read DB
+Request 2 → Write DB
+Request 3 → Read DB
+
+FastAPI may process these in different threads, so check_same_thread=False prevents thread-related SQLite errors.
+
+Important
+
+Even with check_same_thread=False:
+
+SQLite still has limited concurrency.
+Multiple writes can still block each other.
+It does not make writes happen in parallel.
+
+For production systems with heavy concurrent reads/writes, databases like PostgreSQL or MySQL are preferred.
+
+Interview Answer
+
+check_same_thread=False only allows a SQLite connection to be used across different threads. It does not improve concurrency or make database operations parallel. It is mainly used in FastAPI because requests may be handled by different threads.
+
+SessionLocal = sessionmaker(autocommit=False,autoflush=False,bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+What is sessionmaker?
+
+Creates a Session factory. Every time you do:
+
+db = SessionLocal()
+
+you get a new database session.
+
+Parameters
+bind=engine
+bind=engine
+
+Connects the session to the database engine created earlier.
+
+autocommit=False
+autocommit=False
+
+Changes are not automatically saved to the database.
+
+You must explicitly call:
+
+db.commit()
+
+Example:
+
+db.add(user)
+db.commit()
+autoflush=False
+autoflush=False
+
+Prevents SQLAlchemy from automatically sending pending changes to the database before a query.
+
+Example:
+
+db.add(user)
+
+# Not automatically flushed
+db.query(User).all()
+
+You control when data is flushed/committed.
+
+Flow
+Engine
+  ↓
+SessionLocal (factory)
+  ↓
+db = SessionLocal()
+  ↓
+CRUD Operations
+  ↓
+commit()
+  ↓
+close()
+Interview Answer
+
+sessionmaker() creates a database session factory. 
+bind=engine associates the session with the database connection, 
+autocommit=False requires explicit commits to save changes, and autoflush=False prevents SQLAlchemy from automatically flushing pending changes before queries. 
+This gives better control over database transactions.
+
+
+models.py Purpose
+
+models.py contains ORM models (database table definitions).
+
+Instead of creating tables directly in SQL, we define them as Python classes.
+
+Example
+from sqlalchemy import Column, Integer, String
+from database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    email = Column(String)
+What does this do?
+
+This class maps to a database table:
+
+id	name	email
+
+SQLAlchemy understands:
+
+Class User → Table users
+Attribute id → Column id
+Attribute name → Column name
+Why separate models.py?
+Keeps database schema in one place.
+Easier maintenance.
+Reusable across routes and services.
+Follows project structure best practices.
+Typical FastAPI Structure
+app/
+├── main.py
+├── database.py
+├── models.py      ← DB tables
+├── schemas.py     ← Pydantic models
+└── routers/
+Interview Answer
+
+models.py contains SQLAlchemy ORM models that define database tables as Python classes. It acts as a bridge between the application and the database, allowing CRUD operations using Python objects instead of raw SQL.
+
+##############################################
+
+models.py vs schemas.py :
+models.py                   	schemas.py
+Defines database tables	        Defines API request/response structure
+Uses SQLAlchemy ORM	            Uses Pydantic
+Maps to actual DB tables	    Validates incoming/outgoing data
+Used for database operations	Used for API validation
+
+
+request contains HTTP request information, 
+post_id is a path parameter extracted from the URL, and db: Annotated[Session, Depends(get_db)] uses FastAPI dependency injection to automatically provide a SQLAlchemy database session for the request and close it afterward.
