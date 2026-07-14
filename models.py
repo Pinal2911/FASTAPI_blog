@@ -17,7 +17,7 @@ class User(Base):
         default=None,
     )
 
-    posts: Mapped[list[Post]] = relationship(back_populates="author")
+    posts: Mapped[list[Post]] = relationship(back_populates="author",cascade="all,delete-orphan")
 
     @property
     #annotation which makes sure if image file filed is empty then to return default image else path provided by user
